@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminbuchung & Admin Dashboard</title>
+    <!-- Supabase SDK für zentrale Datenbank -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #0f172a;
+            --border-color: #e2e8f0;
+            --danger-color: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 850px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 15px;
+        }
+
+        .nav-header h1 {
+            font-size: 1.5rem;
+            color: var(--text-color);
+        }
+
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background-color: #64748b;
+        }
+
+        .btn-secondary:hover {
+            background-color: #475569;
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+
+        .btn-danger:hover {
+            background-color: #dc2626;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--primary-color);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.95rem;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            font-weight: 600;
+        }
+
+        .badge {
+            background-color: #dbeafe;
+            color: #1e40af;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        .alert-success {
+            background-color: #dcfce7;
+            color: #166534;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Kopfzeile mit Navigation -->
+    <div class="nav-header">
+        <h1 id="page-title">📅 Online Termin buchen</h1>
+        <div>
+            <button type="button" class="btn" onclick="showSection('booking-section', '📅 Online Termin buchen')">Termin Buchen</button>
+            <button type="button" class="btn btn-secondary" onclick="openAdminArea()">🔒 Admin Bereich</button>
+        </div>
+    </div>
+
+    <!-- Erfolgsnachricht -->
+    <div id="successMessage" class="alert-success">
+        Vielen Dank! Dein Termin wurde erfolgreich gebucht und verarbeitet.
+    </div>
+
+    <!-- 1. KUNDEN-BEREICH: TERMIN BUCHEN -->
+    <div id="booking-section" class="section active">
+        <form id="bookingForm" onsubmit="submitBooking(event)">
+            <div class="form-group">
+                <label for="name">Vollständiger Name *</label>
+                <input type="text" id="name" required placeholder="z. B. Max Mustermann">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="email">E-Mail-Adresse *</label>
+                    <input type="email" id="email" required placeholder="max@beispiel.de">
+                </div>
+                <div class="form-group">
+                    <label for="phone">Telefonnummer *</label>
+                    <input type="tel" id="phone" required placeholder="0170 12345678">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="service">Gewünschte Leistung *</label>
+                <select id="service" required>
+                    <option value="">-- Bitte wählen --</option>
+                    <option value="Haarschnitt">Haarschnitt</option>
+                    <option value="Bartpflege">Bartpflege</option>
+                    <option value="Komplettpaket (Haar & Bart)">Komplettpaket (Haar & Bart)</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="date">Datum *</label>
+                    <input type="date" id="date" required>
+                </div>
+                <div class="form-group">
+                    <label for="time">Uhrzeit *</label>
+                    <input type="time" id="time" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn" style="width: 100%; padding: 12px;">Jetzt Termin verbindlich buchen</button>
+        </form>
+    </div>
+
+    <!-- 2. ADMIN LOGIN BEREICH -->
+    <div id="admin-login-section" class="section">
+        <h2>Admin-Anmeldung</h2>
+        <p style="margin-bottom: 15px; color: #64748b;">Bitte gib deinen Admin PIN-Code ein, um auf die Verwaltung zuzugreifen.</p>
+        <form onsubmit="verifyAdminPin(event)">
+            <div class="form-group">
+                <label for="adminPin">Admin PIN Code</label>
+                <input type="password" id="adminPin" required placeholder="PIN eingeben (z. B. 3636)">
+            </div>
+            <button type="submit" class="btn">Einloggen</button>
+        </form>
+    </div>
+
+    <!-- 3. ADMIN DASHBOARD BEREICH -->
+    <div id="admin-dashboard-section" class="section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2>Gebuchte Termine</h2>
+            <button type="button" class="btn btn-secondary" onclick="logoutAdmin()">Abmelden</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Datum & Uhrzeit</th>
+                    <th>Kunde</th>
+                    <th>Leistung</th>
+                    <th>Kontakt</th>
+                    <th>Aktion</th>
+                </tr>
+            </thead>
+            <tbody id="appointmentsList">
+                <!-- Termine werden hier dynamisch eingefügt -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // ==========================================================
+    // EINSTELLUNGEN & KONFIGURATION
+    // ==========================================================
+    
+    // 1. Supabase Zugangsdaten (Falls vorhanden eintragen)
+    const SUPABASE_URL = 'DEINE_SUPABASE_URL';
+    const SUPABASE_KEY = 'DEIN_SUPABASE_ANON_KEY';
+
+    // 2. Formspree / Webhook URL für E-Mail Weiterleitung eintragen
+    // Erstelle kostenlos ein Konto auf formspree.io und trage den Link hier ein:
+    const EMAIL_SERVICE_URL = 'https://formspree.io/f/DEIN_FORMSPREE_CODE'; 
+
+    // Admin PINs für den Zugriff
+    const ALLOWED_PINS = ["3636", "0313"];
+
+    // Supabase Initialisierung
+    let supabaseClient = null;
+    if (SUPABASE_URL !== 'DEINE_SUPABASE_URL' && window.supabase) {
+        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    }
+
+    // Datum-Min-Wert auf heute setzen
+    document.getElementById('date').min = new Date().toISOString().split('T')[0];
+
+    // ==========================================================
+    // NAVIGATION & BEREICHE SWITCHEN
+    // ==========================================================
+    function showSection(sectionId, titleText) {
+        document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+        document.getElementById(sectionId).classList.add('active');
+        if (titleText) {
+            document.getElementById('page-title').innerText = titleText;
+        }
+    }
+
+    function openAdminArea() {
+        if (sessionStorage.getItem('adminLoggedIn') === 'true') {
+            showSection('admin-dashboard-section', '🔑 Admin Dashboard');
+            loadAppointments();
+        } else {
+            showSection('admin-login-section', '🔒 Admin Login');
+        }
+    }
+
+    function verifyAdminPin(event) {
+        event.preventDefault();
+        const pinInput = document.getElementById('adminPin').value;
+
+        if (ALLOWED_PINS.includes(pinInput)) {
+            sessionStorage.setItem('adminLoggedIn', 'true');
+            document.getElementById('adminPin').value = '';
+            showSection('admin-dashboard-section', '🔑 Admin Dashboard');
+            loadAppointments();
+        } else {
+            alert('Falscher PIN-Code! Zugriff verweigert.');
+        }
+    }
+
+    function logoutAdmin() {
+        sessionStorage.removeItem('adminLoggedIn');
+        showSection('booking-section', '📅 Online Termin buchen');
+    }
+
+    // ==========================================================
+    // TERMIN BUCHEN & E-MAIL WEITERLEITEN
+    // ==========================================================
+    async function submitBooking(event) {
+        event.preventDefault();
+
+        const booking = {
+            id: Date.now().toString(),
+            name: document.getElementById('name').value,
+            email: document.getElementById('email').value,
+            phone: document.getElementById('phone').value,
+            service: document.getElementById('service').value,
+            date: document.getElementById('date').value,
+            time: document.getElementById('time').value,
+            created_at: new Date().toISOString()
+        };
+
+        // A) In Supabase oder LocalStorage speichern
+        if (supabaseClient) {
+            const { error } = await supabaseClient.from('appointments').insert([booking]);
+            if (error) {
+                console.error("Supabase-Fehler:", error);
+                alert("Fehler beim Speichern in der Datenbank.");
+                return;
+            }
+        } else {
+            // Backup im lokalen Speicher
+            let localData = JSON.parse(localStorage.getItem('appointments') || '[]');
+            localData.push(booking);
+            localStorage.setItem('appointments', JSON.stringify(localData));
+        }
+
+        // B) E-Mail Benachrichtigung absenden
+        if (EMAIL_SERVICE_URL && !EMAIL_SERVICE_URL.includes('DEIN_FORMSPREE_CODE')) {
+            try {
+                await fetch(EMAIL_SERVICE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        _subject: `Neue Terminbuchung: ${booking.name} (${booking.date} um ${booking.time} Uhr)`,
+                        Kunde: booking.name,
+                        EMail: booking.email,
+                        Telefon: booking.phone,
+                        Leistung: booking.service,
+                        Datum: booking.date,
+                        Uhrzeit: booking.time
+                    })
+                });
+            } catch (err) {
+                console.error("Fehler beim Senden der E-Mail:", err);
+            }
+        }
+
+        // Formular zurücksetzen & Erfolgsmeldung zeigen
+        document.getElementById('bookingForm').reset();
+        const msg = document.getElementById('successMessage');
+        msg.style.display = 'block';
+        setTimeout(() => { msg.style.display = 'none'; }, 5000);
+    }
+
+    // ==========================================================
+    // ADMIN DASHBOARD: TERMINE LADEN & LÖSCHEN
+    // ==========================================================
+    async function loadAppointments() {
+        const tbody = document.getElementById('appointmentsList');
+        tbody.innerHTML = '<tr><td colspan="5">Termine werden geladen...</td></tr>';
+
+        let appointments = [];
+
+        if (supabaseClient) {
+            const { data, error } = await supabaseClient.from('appointments').select('*').order('date', { ascending: true });
+            if (!error && data) {
+                appointments = data;
+            }
+        } else {
+            appointments = JSON.parse(localStorage.getItem('appointments') || '[]');
+        }
+
+        if (appointments.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #64748b;">Keine aktuellen Termine vorhanden.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        appointments.forEach((item) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${item.date}</strong><br><small>${item.time} Uhr</small></td>
+                <td>${item.name}</td>
+                <td><span class="badge">${item.service}</span></td>
+                <td><a href="mailto:${item.email}">${item.email}</a><br><small>${item.phone}</small></td>
+                <td><button class="btn btn-danger" onclick="deleteAppointment('${item.id}')">Löschen</button></td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    async function deleteAppointment(id) {
+        if (!confirm("Möchtest du diesen Termin wirklich aus der Liste löschen?")) return;
+
+        if (supabaseClient) {
+            await supabaseClient.from('appointments').delete().eq('id', id);
+        } else {
+            let localData = JSON.parse(localStorage.getItem('appointments') || '[]');
+            localData = localData.filter(item => item.id !== id);
+            localStorage.setItem('appointments', JSON.stringify(localData));
+        }
+
+        loadAppointments();
+    }
+</script>
+
+</body>
+</html>
